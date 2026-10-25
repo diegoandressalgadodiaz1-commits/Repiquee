@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Repique</title>
+<style>
+:root{--bg:#f4f4f2;--fg:#1a1a1a;--card:#fff;--line:#222;--soft:#d9d9d9;--btn:#1f6f43;--btnfg:#fff;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1c1c1c;--fg:#f0f0f0;--card:#272727;--line:#aaa;--soft:#3a3a3a;--btn:#2f9560}}
+:root[data-theme="dark"]{--bg:#1c1c1c;--fg:#f0f0f0;--card:#272727;--line:#aaa;--soft:#3a3a3a;--btn:#2f9560}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:Arial,Helvetica,sans-serif;padding:10px}
+h1{font-size:20px;text-align:center;margin:6px 0 10px}
+.bar{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:10px}
+button{font:inherit;font-size:13px;border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:6px;padding:7px 10px}
+button.p{background:var(--btn);color:var(--btnfg);border-color:var(--btn)}
+.wrap{overflow-x:auto;border:1px solid var(--line);background:var(--card)}
+table{border-collapse:collapse;min-width:720px;width:100%}
+th,td{border:1px solid var(--line);text-align:center;padding:0;height:34px}
+th{background:var(--soft);font-size:13px;padding:0 4px}
+th.c{cursor:pointer;min-width:44px;font-size:15px}
+td.l{font-weight:bold;background:var(--soft);width:48px}
+td input{width:100%;height:34px;border:0;background:transparent;color:var(--fg);text-align:center;font:inherit;font-size:15px;padding:0;-moz-appearance:textfield}
+td input::-webkit-outer-spin-button,td input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+td.t,tfoot td{font-weight:bold;background:var(--soft)}
+.hint{font-size:12px;text-align:center;margin:8px 0;opacity:.8}
+#pal{position:fixed;left:0;right:0;bottom:0;background:var(--card);border-top:2px solid var(--line);padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));display:none;z-index:5}
+#pal.on{display:block}
+#pal h2{font-size:14px;margin:0 0 8px;text-align:center}
+.sw{display:flex;flex-wrap:wrap;gap:8px;justify-content:center}
+.sw button{width:74px;height:40px;font-size:11px;font-weight:bold}
+input.f{font:inherit;font-size:15px;padding:7px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--fg);min-width:0}
+.top{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:10px}
+.top label{font-size:13px;display:flex;align-items:center;gap:6px}
+#hist{display:none;background:var(--card);border:1px solid var(--line);border-radius:6px;padding:8px;margin-bottom:10px}
+#hist.on{display:block}
+.it{display:flex;align-items:center;gap:6px;padding:7px 4px;border-bottom:1px solid var(--soft);font-size:14px}
+.it span{flex:1}.it.cur{font-weight:bold}
+#msg{text-align:center;font-size:13px;min-height:18px;margin-bottom:6px;color:var(--btn);font-weight:bold}
+</style><script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+</head>
+<body>
+<h1>REPIQUE</h1>
+<div class="top"><label>Semana <input class="f" id="sem" type="text" size="6" placeholder="Ej: 42"></label>
+<label>Fecha <input class="f" id="fec" type="date"></label></div>
+<div class="bar">
+<button class="p" id="save">Guardar</button>
+<button class="p" id="xl">Descargar Excel</button>
+<button id="new">Nuevo</button>
+<button id="hb">Historial</button>
+<button id="shift">Correr colores →</button>
+<button id="clr">Borrar números</button>
+<button id="rst">Quitar colores</button>
+</div>
+<div id="msg"></div>
+<div id="hist"></div>
+<div class="wrap"><table id="t"></table></div>
+<p class="hint">Toca el número de una columna para elegir el color de la cinta.</p>
+<div id="pal"><h2 id="pt"></h2><div class="sw" id="sw"></div></div>
+<script>
+var COLS=12,ROWS=19;
+var PAL=[["Sin color",""],["Negro","#2b2b2b"],["Café","#8b4513"],["Rojo","#ff0000"],["Violeta","#7030a0"],["Amarillo","#ffff00"],["Blanco","#ffffff"],["Azul","#00b0f0"],["Verde","#00a550"],["Naranja","#ff9900"],["Gris","#999999"],["Beige","#e8d9b0"]];
+var DEF=["","","","","#2b2b2b","#8b4513","#ff0000","#7030a0","#ffff00","#ffffff","#00b0f0","#00a550"];
+var S={id:null,semana:"",fecha:"",colors:DEF.slice(),v:{}},H=[];
+try{var s=localStorage.getItem("repique");if(s){var o=JSON.parse(s);if(o&&o.colors&&o.colors.length==COLS)S=o}}catch(e){}
+try{var hs=localStorage.getItem("repique_hist");if(hs)H=JSON.parse(hs)||[]}catch(e){}
+function today(){var d=new Date();return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2)}
+if(!S.fecha)S.fecha=today();
+function save(){try{localStorage.setItem("repique",JSON.stringify(S))}catch(e){}}
+function saveH(){try{localStorage.setItem("repique_hist",JSON.stringify(H))}catch(e){}}
+function total(o){var t=0;for(var k in o.v)t+=parseFloat(o.v[k])||0;return t}
+function fmt(f){if(!f)return"sin fecha";var p=f.split("-");return p[2]+"/"+p[1]+"/"+p[0]}
+function msg(t){var m=document.getElementById("msg");m.textContent=t;setTimeout(function(){m.textContent=""},2500)}
+function head(){document.getElementById("sem").value=S.semana||"";document.getElementById("fec").value=S.fecha||""}
+function renderH(){var h=document.getElementById("hist");
+if(!H.length){h.innerHTML='<div class="it">Aún no hay repiques guardados.</div>';return}
+var L=H.slice().sort(function(a,b){return (b.fecha||"").localeCompare(a.fecha||"")});
+h.innerHTML=L.map(function(o){return '<div class="it'+(o.id==S.id?' cur':'')+'"><span>Semana '+(o.semana||"?")+' · '+fmt(o.fecha)+' · total '+total(o)+'</span><button data-a="open" data-id="'+o.id+'">Abrir</button><button data-a="del" data-id="'+o.id+'">Eliminar</button></div>'}).join("")}
+function fg(h){if(!h)return"inherit";var r=parseInt(h.substr(1,2),16),g=parseInt(h.substr(3,2),16),b=parseInt(h.substr(5,2),16);return(r*.299+g*.587+b*.114)>150?"#000":"#fff"}
+var sel=-1,T=document.getElementById("t");
+function build(){
+var h="<thead><tr><th>LOTES</th>";
+for(var c=0;c<COLS;c++)h+='<th class="c" data-c="'+c+'" style="background:'+(S.colors[c]||"")+';color:'+fg(S.colors[c])+'">'+(c+1)+"</th>";
+h+="<th>BACOTAS</th><th>JÓVENES</th><th>TOTAL</th></tr></thead><tbody>";
+for(var r=0;r<ROWS;r++){h+='<tr><td class="l">'+(r+1)+"</td>";
+for(var c=0;c<COLS+2;c++){var v=S.v[r+"_"+c];h+='<td><input type="number" inputmode="numeric" min="0" data-r="'+r+'" data-c="'+c+'" value="'+(v==null?"":v)+'"></td>'}
+h+='<td class="t" id="rt'+r+'">0</td></tr>'}
+h+='</tbody><tfoot><tr><td>TOTAL</td>';
+for(var c=0;c<COLS+2;c++)h+='<td id="ct'+c+'">0</td>';
+h+='<td id="gt">0</td></tr></tfoot>';
+T.innerHTML=h;calc()}
+function calc(){
+var gt=0,ct=[];for(var c=0;c<COLS+2;c++)ct[c]=0;
+for(var r=0;r<ROWS;r++){var rt=0;for(var c=0;c<COLS+2;c++){var n=parseFloat(S.v[r+"_"+c])||0;rt+=n;ct[c]+=n}
+document.getElementById("rt"+r).textContent=rt;gt+=rt}
+for(var c=0;c<COLS+2;c++)document.getElementById("ct"+c).textContent=ct[c];
+document.getElementById("gt").textContent=gt}
+T.addEventListener("input",function(e){var i=e.target;if(i.tagName!="INPUT")return;
+var k=i.dataset.r+"_"+i.dataset.c;if(i.value==="")delete S.v[k];else S.v[k]=i.value;save();calc()});
+T.addEventListener("click",function(e){var th=e.target.closest("th.c");if(!th)return;
+sel=+th.dataset.c;document.getElementById("pt").textContent="Color de la columna "+(sel+1);
+document.getElementById("pal").classList.add("on")});
+var sw=document.getElementById("sw");
+PAL.forEach(function(p){var b=document.createElement("button");b.textContent=p[0];
+if(p[1]){b.style.background=p[1];b.style.color=fg(p[1])}
+b.onclick=function(){S.colors[sel]=p[1];save();build();document.getElementById("pal").classList.remove("on")};sw.appendChild(b)});
+document.addEventListener("click",function(e){var pal=document.getElementById("pal");
+if(pal.classList.contains("on")&&!pal.contains(e.target)&&!e.target.closest("th.c"))pal.classList.remove("on")});
+document.getElementById("shift").onclick=function(){S.colors.unshift("");S.colors.pop();save();build()};
+document.getElementById("clr").onclick=function(){if(confirm("¿Borrar todos los números?")){S.v={};save();build()}};
+document.getElementById("rst").onclick=function(){S.colors=new Array(COLS).fill("");save();build()};
+document.getElementById("sem").oninput=function(){S.semana=this.value;save()};
+document.getElementById("fec").oninput=function(){S.fecha=this.value;save()};
+document.getElementById("save").onclick=function(){
+var o=JSON.parse(JSON.stringify(S));
+if(!S.id){S.id=Date.now();o.id=S.id;H.push(o)}else{var i=H.findIndex(function(x){return x.id==S.id});if(i>=0)H[i]=o;else H.push(o)}
+saveH();save();renderH();msg("Guardado en el historial")};
+document.getElementById("new").onclick=function(){S={id:null,semana:"",fecha:today(),colors:S.colors.slice(),v:{}};save();head();build();renderH();msg("Repique nuevo (se mantienen los colores)")};
+document.getElementById("hb").onclick=function(){renderH();document.getElementById("hist").classList.toggle("on")};
+document.getElementById("hist").addEventListener("click",function(e){var b=e.target.closest("button");if(!b)return;
+var id=b.dataset.id;
+if(b.dataset.a=="open"){var o=H.find(function(x){return x.id==id});if(o){S=JSON.parse(JSON.stringify(o));save();head();build();renderH();msg("Abierto: puedes corregir y volver a Guardar")}}
+else if(confirm("¿Eliminar este repique del historial?")){H=H.filter(function(x){return x.id!=id});if(S.id==id)S.id=null;saveH();save();renderH()}});
+function argb(h){return "FF"+h.substr(1).toUpperCase()}
+async function exportXlsx(){
+if(!window.ExcelJS){msg("No cargó la librería de Excel (revisa internet)");return}
+var wb=new ExcelJS.Workbook(),ws=wb.addWorksheet("Repique"),NC=COLS+4,F="Arial";
+var thin={style:"thin",color:{argb:"FF000000"}},bd={top:thin,left:thin,bottom:thin,right:thin};
+var ctr={horizontal:"center",vertical:"middle"};
+ws.mergeCells(1,1,1,NC);var t=ws.getCell(1,1);t.value="REPIQUE";t.font={name:F,bold:true,size:16};t.alignment=ctr;
+ws.mergeCells(2,1,2,NC);var u=ws.getCell(2,1);u.value="Semana: "+(S.semana||"-")+"     Fecha: "+fmt(S.fecha);u.font={name:F,size:12};u.alignment=ctr;
+var hr=4,h=["LOTES"];for(var c=1;c<=COLS;c++)h.push(c);h.push("BACOTAS","JÓVENES","TOTAL");
+h.forEach(function(v,i){var x=ws.getCell(hr,i+1);x.value=v;x.border=bd;x.alignment=ctr;x.font={name:F,bold:true,size:12};
+var col=i>=1&&i<=COLS?S.colors[i-1]:"";
+if(col){x.fill={type:"pattern",pattern:"solid",fgColor:{argb:argb(col)}};x.font={name:F,bold:true,size:12,color:{argb:fg(col)=="#fff"?"FFFFFFFF":"FF000000"}}}});
+var first=hr+1,last=hr+ROWS,ct=[],gt=0,L=function(n){return String.fromCharCode(64+n)};
+for(var c=0;c<COLS+2;c++)ct[c]=0;
+for(var r=0;r<ROWS;r++){var row=first+r,rt=0;
+var a=ws.getCell(row,1);a.value=r+1;a.font={name:F,bold:true,size:12};a.alignment=ctr;a.border=bd;
+for(var c=0;c<COLS+2;c++){var n=parseFloat(S.v[r+"_"+c]);var x=ws.getCell(row,c+2);
+if(!isNaN(n)){x.value=n;rt+=n;ct[c]+=n}x.border=bd;x.alignment=ctr;x.font={name:F,size:12}}
+var y=ws.getCell(row,COLS+4);y.value={formula:"SUM(B"+row+":"+L(COLS+3)+row+")",result:rt};y.border=bd;y.alignment=ctr;y.font={name:F,size:12};gt+=rt}
+var tr=last+1,g="FFD9D9D9";
+var a=ws.getCell(tr,1);a.value="TOTAL";
+for(var c=0;c<COLS+2;c++){var x=ws.getCell(tr,c+2);x.value={formula:"SUM("+L(c+2)+first+":"+L(c+2)+last+")",result:ct[c]}}
+var z=ws.getCell(tr,COLS+4);z.value={formula:"SUM("+L(COLS+4)+first+":"+L(COLS+4)+last+")",result:gt};
+for(var c=1;c<=NC;c++){var x=ws.getCell(tr,c);x.border=bd;x.alignment=ctr;x.font={name:F,bold:true,size:12};x.fill={type:"pattern",pattern:"solid",fgColor:{argb:g}}}
+ws.getColumn(1).width=9;for(var c=2;c<=COLS+1;c++)ws.getColumn(c).width=7;
+ws.getColumn(COLS+2).width=12;ws.getColumn(COLS+3).width=12;ws.getColumn(COLS+4).width=10;
+ws.pageSetup={orientation:"landscape",fitToPage:true,fitToWidth:1,fitToHeight:1};
+var buf=await wb.xlsx.writeBuffer();
+var name="repique_semana_"+((S.semana||"").replace(/[^A-Za-z0-9]+/g,"_")||"sin_numero")+"_"+(S.fecha||"sin_fecha")+".xlsx";
+try{if(window.claude&&claude.use){var d=await claude.use("downloads");if(d){await d.save({filename:name,data:buf});msg("Excel listo");return}}}
+catch(e){if(e&&e.code=="declined")return}
+var bl=new Blob([buf],{type:"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}),an=document.createElement("a");
+an.href=URL.createObjectURL(bl);an.download=name;document.body.appendChild(an);an.click();an.remove();msg("Excel descargado")}
+document.getElementById("xl").onclick=function(){exportXlsx().catch(function(){msg("No se pudo crear el Excel")})};
+head();build();renderH();
+</script></body></html>
